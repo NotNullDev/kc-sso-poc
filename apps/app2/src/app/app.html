@@ -1,0 +1,38 @@
+<main>
+  <header>
+    <div>
+      <p>{{ appLabel }}</p>
+      <h1>Todo</h1>
+    </div>
+
+    @if (me(); as user) {
+      <section>
+        <strong>{{ user.username }}</strong>
+        <span>{{ user.email || user.issuer }}</span>
+      </section>
+    }
+  </header>
+
+  <form (submit)="add($event)">
+    <input name="title" placeholder="New task" autocomplete="off" [value]="draft()" (input)="draft.set(inputValue($event))">
+    <button type="submit">Add</button>
+  </form>
+
+  @if (error()) {
+    <p class="error">{{ error() }}</p>
+  }
+
+  <ul>
+    @for (todo of todos(); track todo.id) {
+      <li>
+        <label>
+          <input type="checkbox" [checked]="todo.done" (change)="toggle(todo)">
+          <span [class.done]="todo.done">{{ todo.title }}</span>
+        </label>
+        <button type="button" (click)="remove(todo)">Delete</button>
+      </li>
+    } @empty {
+      <li class="empty">No tasks yet</li>
+    }
+  </ul>
+</main>

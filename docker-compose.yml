@@ -1,0 +1,124 @@
+services:
+  keycloak:
+    build:
+      context: ./keycloak
+      dockerfile: Dockerfile
+    image: kc-sso-poc/keycloak:local
+    container_name: kc-sso-poc-keycloak
+    command:
+      - start-dev
+      - --http-port=8080
+      - --import-realm
+    env_file:
+      - .env
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: dev-file
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL}
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY_HEADERS: xforwarded
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    restart: unless-stopped
+
+  app1-backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    image: kc-sso-poc/backend:local
+    container_name: kc-sso-poc-app1-backend
+    environment:
+      APP_NAME: app1
+      OIDC_ISSUER_URL: ${OAUTH2_PROXY_OIDC_ISSUER_URL}
+      OIDC_JWKS_URL: http://keycloak:8080/realms/kc-sso-poc/protocol/openid-connect/certs
+      OIDC_AUDIENCE: ${OAUTH2_PROXY_CLIENT_ID}
+    restart: unless-stopped
+
+  app2-backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    image: kc-sso-poc/backend:local
+    container_name: kc-sso-poc-app2-backend
+    environment:
+      APP_NAME: app2
+      OIDC_ISSUER_URL: ${OAUTH2_PROXY_OIDC_ISSUER_URL}
+      OIDC_JWKS_URL: http://keycloak:8080/realms/kc-sso-poc/protocol/openid-connect/certs
+      OIDC_AUDIENCE: ${OAUTH2_PROXY_CLIENT_ID}
+    restart: unless-stopped
+
+  # https://oauth2-proxy.github.io/oauth2-proxy/configuration/providers/keycloak_oidc
+  oauth2-proxy-app1:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: kc-sso-poc-oauth2-proxy-app1
+    env_file:
+      - .env
+    command:
+      - --http-address=0.0.0.0:4180
+      - --provider=keycloak-oidc
+      - --oidc-issuer-url=${OAUTH2_PROXY_OIDC_ISSUER_URL}
+      - --client-id=${OAUTH2_PROXY_CLIENT_ID}
+      - --client-secret=${OAUTH2_PROXY_CLIENT_SECRET}
+      - --code-challenge-method=S256
+      - --cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET}
+      - --cookie-secure=${OAUTH2_PROXY_COOKIE_SECURE:-false}
+      - --cookie-samesite=lax
+      - --cookie-refresh=${OAUTH2_PROXY_COOKIE_REFRESH:-4m}
+      - --email-domain=*
+      - --reverse-proxy=true
+      - --set-xauthrequest=true
+      - --pass-access-token=true
+      - --pass-authorization-header=true
+      - --scope=openid profile email roles
+      - --upstream=static://200
+      - --redirect-url=${APP1_PUBLIC_URL}/oauth2/callback
+      - --skip-provider-button=true
+      - --skip-jwt-bearer-tokens=true
+    restart: unless-stopped
+
+  oauth2-proxy-app2:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: kc-sso-poc-oauth2-proxy-app2
+    env_file:
+      - .env
+    command:
+      - --http-address=0.0.0.0:4180
+      - --provider=keycloak-oidc
+      - --oidc-issuer-url=${OAUTH2_PROXY_OIDC_ISSUER_URL}
+      - --client-id=${OAUTH2_PROXY_CLIENT_ID}
+      - --client-secret=${OAUTH2_PROXY_CLIENT_SECRET}
+      - --code-challenge-method=S256
+      - --cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET}
+      - --cookie-secure=${OAUTH2_PROXY_COOKIE_SECURE:-false}
+      - --cookie-samesite=lax
+      - --cookie-refresh=${OAUTH2_PROXY_COOKIE_REFRESH:-4m}
+      - --email-domain=*
+      - --reverse-proxy=true
+      - --set-xauthrequest=true
+      - --pass-access-token=true
+      - --pass-authorization-header=true
+      - --scope=openid profile email roles
+      - --upstream=static://200
+      - --redirect-url=${APP2_PUBLIC_URL}/oauth2/callback
+      - --skip-provider-button=true
+      - --skip-jwt-bearer-tokens=true
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    image: kc-sso-poc/nginx:local
+    container_name: kc-sso-poc-nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - /root/.certs:/etc/nginx/certs:ro
+    restart: unless-stopped
+
+volumes:
+  keycloak_data:
