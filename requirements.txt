@@ -1,8 +1,0 @@
-SSO using keycloak POC.
-
-We will serve frontend behind nginx with keycloak integration.
-User will be able to download frontend files only if he is successfully authenticated with keycloak and has correct permission.
-
-We will integrate keycloak with Microsoft Entra ID later on - user will be logging into the app using his microsoft account.
-
-
